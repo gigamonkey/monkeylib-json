@@ -58,13 +58,26 @@
 (defmethod emit-json ((object symbol) stream)
   (write-string (json-stringify object) stream))
 				 
-#+(or)(defmethod emit-json ((object string) stream)
+(defmethod emit-json ((object string) stream)
   (write-char #\" stream)
-  (write-string object stream)
+  (loop for char across object do (emit-json-char char stream))
   (write-char #\" stream))
 
-(defmethod emit-json ((object string) stream)
-  (prin1 object stream))
+(defun emit-json-char (char stream)
+  (case char
+    (#\" (write-string "\\\"" stream))
+    (#\\ (write-string "\\\\" stream))
+    (#\/ (write-string "\\/" stream))
+    (#.(code-char 8) (write-string "\\b" stream))
+    (#.(code-char 9) (write-string "\\t" stream))
+    (#.(code-char 10) (write-string "\\n" stream))
+    (#.(code-char 12) (write-string "\\f" stream))
+    (#.(code-char 13) (write-string "\\r" stream))
+    (t
+     (cond
+       ((<= 0 (char-code char) #x1f)
+	(format stream "\\u~4,'0x" (char-code char)))
+       (t (write-char char stream))))))
 
 (defmethod emit-json ((object number) stream)
   (write-string (json-stringify object) stream))
