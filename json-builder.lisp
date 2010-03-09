@@ -35,7 +35,7 @@
    ws (^ "}" (or (coerce object 'list) *empty-object*))))
 
 (defprod key-value-pair () 
-  (^ (string ws ":" ws value) (cons (intern (string-upcase string) :keyword) value)))
+  (^ (string ws ":" ws value) (cons string value)))
 
 (defprod array () 
   ((^ "[" (make-array 5 :adjustable t :fill-pointer 0))
@@ -81,7 +81,7 @@
 (defprod hex4 () (hex hex hex hex))
 
 (defprod number ()
-  (^ number-syntax (read-from-string number-syntax)))
+  (^ number-syntax (let ((*read-default-float-format* 'double-float)) (read-from-string number-syntax))))
   
 (defprod number-syntax ()
   (int (? (/ (frac (? exp)) exp))))

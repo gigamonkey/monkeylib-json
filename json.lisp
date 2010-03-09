@@ -10,9 +10,8 @@
 ;; method to this generic function that generates a json-exp.
 
 ;; TO-JAVASCRIPT: Converts a json-exp into FOO Javascript language.
-;; It's unlikely there'd be a need to 
 
-(defun json (data)
+#+(or)(defun json (data)
   "This should only be used with sexps containing types that can
   be encoded in JSON syntax via the to-json generic function.
   By default this include hashtables, sequences, numbers,
@@ -25,6 +24,71 @@
 	 (new-pretty-printer)
 	 (to-javascript (to-json data))
 	 (new-env 'statement-or-expression :expression (top-level-environment javascript)))))))
+
+(defun json (data)
+  (with-output-to-string (out)
+    (emit-json (to-json data) out)))
+
+(defgeneric emit-json (object stream))
+
+(defmethod emit-json ((object t) stream)
+  (declare (ignore stream))
+  (error "Can't encode ~a in JSON." (class-name (class-of object))))
+
+(defmethod emit-json ((object (eql nil)) stream)
+  (write-string "{}" stream))
+
+(defmethod emit-json ((object cons) stream)
+  (write-char #\{ stream)
+  (loop for (key value . rest) on object by #'cddr do 
+       (emit-json (json-stringify key) stream)
+       (write-char #\: stream)
+       (emit-json (to-json value) stream)
+       when rest do (write-char #\, stream))
+  (write-char #\} stream))
+
+(defmethod emit-json ((object vector) stream)
+  (write-char #\[ stream)
+  (loop with len = (length object)
+     for i from 0 below len
+     do (emit-json (to-json (aref object i)) stream)
+     when (< i (1- len)) do (write-char #\, stream))
+  (write-char #\] stream))
+
+(defmethod emit-json ((object symbol) stream)
+  (write-string (json-stringify object) stream))
+				 
+#+(or)(defmethod emit-json ((object string) stream)
+  (write-char #\" stream)
+  (write-string object stream)
+  (write-char #\" stream))
+
+(defmethod emit-json ((object string) stream)
+  (prin1 object stream))
+
+(defmethod emit-json ((object number) stream)
+  (write-string (json-stringify object) stream))
+
+(defmethod emit-json ((object (eql t)) stream)
+  (emit-json :true stream))
+  
+(defmethod json-stringify (object)
+  (error "Can't stringify ~a" object))
+
+(defmethod json-stringify ((object string)) object)
+
+(defmethod json-stringify ((object symbol))
+  (unless (keywordp object)
+    (error "Only keywords allowed in JSON-EXPs. Got ~a in package ~a" object (package-name (symbol-package object))))
+  (string-downcase (symbol-name object)))
+
+(defmethod json-stringify ((object number))
+  (let ((*read-default-float-format* 'double-float))
+    (let ((float (float object 0d0)))
+      (if (= (round float) float)
+	  (prin1-to-string (round float))
+	  (prin1-to-string float)))))
+    
 
 (defgeneric to-json (thing)
   (:documentation "Convert an arbitrary Lisp object to a json-exp.
@@ -51,7 +115,7 @@
 
 (defmethod to-javascript ((thing symbol))
   (cond
-    ((keywordp thing) (intern (string-downcase (symbol-name thing)) :keyword))
+    ((keywordp thing) (string-downcase (symbol-name thing)))
     (t (error "Only keyword symbols allowed in json-exps: ~s." thing))))
 
 (defmethod to-javascript ((thing vector)) 
