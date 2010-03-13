@@ -67,7 +67,7 @@
   (case char
     (#\" (write-string "\\\"" stream))
     (#\\ (write-string "\\\\" stream))
-    (#\/ (write-string "\\/" stream))
+    #+(or)(#\/ (write-string "\\/" stream))
     (#.(code-char 8) (write-string "\\b" stream))
     (#.(code-char 9) (write-string "\\t" stream))
     (#.(code-char 10) (write-string "\\n" stream))
