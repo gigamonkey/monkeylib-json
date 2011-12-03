@@ -2,11 +2,13 @@
 
 ;; Parser for JSON syntax (<http://www.json.org/>)
 
+(defvar *object-type* :vector)
+
 (defvar *empty-object* (make-symbol "EMPTY-OBJECT"))
 
 (defchartype string-char '(not (member #\\ #\")))
 
-(defchartype digit1-9 
+(defchartype digit1-9
   '(member #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9))
 
 (defchartype digit
@@ -18,26 +20,56 @@
 (defprod ws ()
   (* (/ #\Space #\Tab #\Newline)))
 
-(defun save-in-hash (key-value-pair hash)
-  (setf (gethash (car key-value-pair) hash) (cdr key-value-pair)))
+;; API for building objects. Currently internal only and implemented
+;; to produce either a plist or a hash-table.
 
-(defun save-key-value-pair (key-value-pair vector)
-  (vector-push-extend (car key-value-pair) vector)
-  (vector-push-extend (cdr key-value-pair) vector))
+(defgeneric make-object (type)
+  (:documentation "Make a new object for a given named type."))
+
+(defgeneric save-key-value (key-value-pair object)
+  (:documentation "Save the key and value in the data structure returned by MAKE-OBJECT."))
+
+(defgeneric finish-object (object)
+  (:documentation "Return the actual object that will be put into the data structure."))
+
+;; vectors as objects (returned as a plist)
+
+(defmethod make-object ((type (eql :vector)))
+  (make-array 5 :adjustable t :fill-pointer 0))
+
+(defmethod save-key-value (key-value-pair (object vector))
+  (destructuring-bind (key . value) key-value-pair
+    (vector-push-extend key object)
+    (vector-push-extend value object)))
+
+(defmethod finish-object ((object vector))
+  (or (coerce object 'list) *empty-object*))
+
+;; hash-tables as objects
+
+(defmethod make-object ((type (eql :hash-table)))
+  (make-hash-table :test #'equal))
+
+(defmethod save-key-value (key-value-pair (object hash-table))
+  (destructuring-bind (key . value) key-value-pair
+    (setf (gethash key object) value)))
+
+(defmethod finish-object ((object hash-table)) object)
+
 
 ;;; Main productions
 
 (defprod object ()
-  ((^ "{" (make-array 5 :adjustable t :fill-pointer 0))
-   ws 
-   (? (@ key-value-pair (save-key-value-pair key-value-pair object)))
-   (* ws "," ws (@ key-value-pair (save-key-value-pair key-value-pair object)))
-   ws (^ "}" (or (coerce object 'list) *empty-object*))))
+  ((^ "{" (make-object *object-type*))
+   ws
+   (? (@ key-value-pair (save-key-value key-value-pair object)))
+   (* ws "," ws (@ key-value-pair (save-key-value key-value-pair object)))
+   ws (^ "}" (finish-object object))))
 
-(defprod key-value-pair () 
+(defprod key-value-pair ()
   (^ (string ws ":" ws value) (cons string value)))
 
-(defprod array () 
+(defprod array ()
   ((^ "[" (make-array 5 :adjustable t :fill-pointer 0))
    ws
    (? (@ value (vector-push-extend value array)))
@@ -67,7 +99,7 @@
   (^ (/ escape string-char)))
 
 (defprod escape ()
-  ("\\" 
+  ("\\"
    (/ (^ "\"" #\")
       (^ "\\" #\\)
       (^ "/" #\/)
@@ -82,7 +114,7 @@
 
 (defprod number ()
   (^ number-syntax (let ((*read-default-float-format* 'double-float)) (read-from-string number-syntax))))
-  
+
 (defprod number-syntax ()
   (int (? (/ (frac (? exp)) exp))))
 
@@ -113,4 +145,4 @@ represent Javascript objects and vectors to represent arrays."
 (defmacro tjp (production input)
   `((lambda (x)
       (parselet ((foo (^ ,production)))
-	(foo x))) ,input))
+        (foo x))) ,input))
