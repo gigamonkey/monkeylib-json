@@ -7,13 +7,11 @@
 
 (defpackage :com.gigamonkeys.json
   (:use :cl
-        :com.gigamonkeys.foo
-        :com.gigamonkeys.foo.javascript
-        :com.gigamonkeys.macro-utilities
+        :com.gigamonkeys.utilities
         :com.gigamonkeys.json.parser)
-  (:import-from :com.gigamonkeys.foo.javascript
-                :new-env
-                :statement-or-expression
-                :top-level-environment)
-  (:import-from :com.gigamonkeys.foo.text-output :new-pretty-printer)
-  (:export :json :parse-json :*object-type* :to-json))
+  (:export
+   :json
+   :parse-json
+   :*object-type*
+   :to-json
+   :json-stringify))

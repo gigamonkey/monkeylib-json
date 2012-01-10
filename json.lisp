@@ -1,33 +1,37 @@
 (in-package :com.gigamonkeys.json)
 
-;; JSON: The top-level function for converting Lisp objects into a
-;; string in the JSON format. It can convert any object that can be
-;; converted to a json-exp.
-
-;; TO-JSON: generic function for converting an arbitrary Lisp object
-;; into a json-exp that the JSON function knows how to render into
-;; JSON format. To make an arbitrary class convertable to JSON, add a
-;; method to this generic function that generates a json-exp.
-
-;; TO-JAVASCRIPT: Converts a json-exp into FOO Javascript language.
-
-#+(or)(defun json (data)
-  "This should only be used with sexps containing types that can
-  be encoded in JSON syntax via the to-json generic function.
-  By default this include hashtables, sequences, numbers,
-  strings, NIL, T, and the keywords :true, :false, and :null."
-  (with-output-to-string (out)
-    (with-foo-output (out :pretty t)
-      (let ((javascript (make-instance 'javascript)))
-	(process 
-	 javascript
-	 (new-pretty-printer)
-	 (to-javascript (to-json data))
-	 (new-env 'statement-or-expression :expression (top-level-environment javascript)))))))
+;;; JSON-EXPS:
+;;;
+;;; strings  => strings, e.g. "foo" => "foo"
+;;; numbers  => numbers, e.g. 10 => 10
+;;; t, :true => true
+;;; keywords => lowercase name.
+;;; :false   => false
+;;; :null    => null
+;;; list     => {} with keys and values taken pairwise from list. (Empty list, i.e. nil, is empty object)
+;;; vector   => [] with elements taken from vector.
 
 (defun json (data)
+  "The top-level function for converting Lisp objects into a string in
+the JSON format. It can convert any object that can be converted to a
+json-exp via the to-json generic function."
   (with-output-to-string (out)
     (emit-json (to-json data) out)))
+
+(defgeneric to-json (thing)
+  (:documentation "Generic function that can convert an arbitrary Lisp
+  object to a json-exp, i.e. a sexp that can then be rendered as json.
+  To make an arbitrary class convertable to JSON, add a method to this
+  generic function that generates a json-exp."))
+
+(defgeneric json-stringify (object)
+  (:documentation "Convert object directly to a JSON representation as
+  a string. Default methods are provided for strings, symbols (which
+  must be keywords), and numbers but there may be situations where it
+  is appropriate to define new methods on this function. In general,
+  however, it is probably better to define a method on to-json to
+  convert the object to a sexp that can be rendered as JSON."))
+
 
 (defgeneric emit-json (object stream))
 
@@ -40,7 +44,7 @@
 
 (defmethod emit-json ((object cons) stream)
   (write-char #\{ stream)
-  (loop for (key value . rest) on object by #'cddr do 
+  (loop for (key value . rest) on object by #'cddr do
        (emit-json (json-stringify key) stream)
        (write-char #\: stream)
        (emit-json (to-json value) stream)
@@ -57,7 +61,7 @@
 
 (defmethod emit-json ((object symbol) stream)
   (write-string (json-stringify object) stream))
-				 
+
 (defmethod emit-json ((object string) stream)
   (write-char #\" stream)
   (loop for char across object do (emit-json-char char stream))
@@ -76,7 +80,7 @@
     (t
      (cond
        ((<= 0 (char-code char) #x1f)
-	(format stream "\\u~4,'0x" (char-code char)))
+        (format stream "\\u~4,'0x" (char-code char)))
        (t (write-char char stream))))))
 
 (defmethod emit-json ((object number) stream)
@@ -84,59 +88,25 @@
 
 (defmethod emit-json ((object (eql t)) stream)
   (emit-json :true stream))
-  
-(defmethod json-stringify (object)
-  (error "Can't stringify ~a" object))
+
+(defmethod json-stringify ((object t)) (error "Can't stringify ~a" object))
 
 (defmethod json-stringify ((object string)) object)
 
 (defmethod json-stringify ((object symbol))
   (unless (keywordp object)
-    (error "Only keywords allowed in JSON-EXPs. Got ~a in package ~a" object (package-name (symbol-package object))))
+    (error "Only keywords allowed in JSON-EXPs. Got ~a in package ~a"
+           object (package-name (symbol-package object))))
   (string-downcase (symbol-name object)))
 
 (defmethod json-stringify ((object number))
   (let ((*read-default-float-format* 'double-float))
     (let ((float (float object 0d0)))
       (if (= (round float) float)
-	  (prin1-to-string (round float))
-	  (prin1-to-string float)))))
-    
-
-(defgeneric to-json (thing)
-  (:documentation "Convert an arbitrary Lisp object to a json-exp.
-  This method is probably the right thing for "))
+          (prin1-to-string (round float))
+          (prin1-to-string float)))))
 
 (defmethod to-json ((thing t)) thing)
 
 (defmethod to-json ((thing hash-table))
   (loop for k being the hash-keys of thing using (hash-value v) collect k collect v))
-
-;;; This function converts a json-exp to the format understood by 
-
-(defgeneric to-javascript (thing)
-  (:documentation "Convert data to the an sexp that can be converted to Javascript code (i.e. JSON)."))
-
-(defmethod to-javascript ((thing t))
-  (error "JSON doesn't support encoding objects of class ~a." (class-name (class-of thing))))
-
-(defmethod to-javascript ((thing string)) thing)
-
-(defmethod to-javascript ((thing number)) thing)
-
-(defmethod to-javascript ((thing (eql t))) (to-javascript :true))
-
-(defmethod to-javascript ((thing symbol))
-  (cond
-    ((keywordp thing) (string-downcase (symbol-name thing)))
-    (t (error "Only keyword symbols allowed in json-exps: ~s." thing))))
-
-(defmethod to-javascript ((thing vector)) 
-  `(array ,@(mapcar #'(lambda (x) (to-javascript (to-json x))) (coerce thing 'list))))
-
-(defmethod to-javascript ((thing cons))
-  `(object ,@(loop for (k v) on thing by #'cddr collect (intern (string-downcase k) :keyword) collect (to-javascript (to-json v)))))
-
-(defmethod to-javascript ((thing (eql nil))) '(object))
-
-
