@@ -11,6 +11,11 @@
 ;;; list     => {} with keys and values taken pairwise from list. (Empty list, i.e. nil, is empty object)
 ;;; vector   => [] with elements taken from vector.
 
+(defun write-json (data &optional (stream *standard-output*))
+  "Write DATA to STREAM in JSON format."
+  (emit-json data stream)
+  nil)
+
 (defun json (data)
   "The top-level function for converting Lisp objects into a string in
 the JSON format. It can convert any object that can be converted to a
@@ -33,11 +38,11 @@ json-exp via the to-json generic function."
   convert the object to a sexp that can be rendered as JSON."))
 
 
-(defgeneric emit-json (object stream))
+(defgeneric emit-json (object stream)
+  (:documentation "Emit object to stream as JSON."))
 
 (defmethod emit-json ((object t) stream)
-  (declare (ignore stream))
-  (error "Can't encode ~a in JSON." (class-name (class-of object))))
+  (emit-json (to-json object) stream))
 
 (defmethod emit-json ((object (eql nil)) stream)
   (write-string "{}" stream))

@@ -10,6 +10,7 @@
         :com.gigamonkeys.utilities
         :com.gigamonkeys.json.parser)
   (:export
+   :write-json
    :json
    :parse-json
    :*object-type*
