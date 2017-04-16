@@ -114,4 +114,4 @@ json-exp via the to-json generic function."
 (defmethod to-json ((thing t)) thing)
 
 (defmethod to-json ((thing hash-table))
-  (loop for k being the hash-keys of thing using (hash-value v) collect k collect v))
+  (loop for k being the hash-keys of thing using (hash-value v) collect k collect (to-json v)))
